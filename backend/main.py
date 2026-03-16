@@ -12,6 +12,7 @@ from services.appointment import AppointmentService
 
 from services.tools import get_appointment_tools
 from memory.manager import MemoryManager
+from services.campaign import CampaignManager
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -22,6 +23,26 @@ llm_service = LLMService()
 tts_handler = DeepgramTTSHandler()
 memory_manager = MemoryManager()
 active_sessions = {} # Track {session_id: task} for interruption
+
+
+async def outbound_callback(patient_context, topic, system_message, call_id):
+    """
+    Placeholder callback invoked when CampaignManager wants to initiate
+    an outbound campaign call.
+
+    In a production deployment, this is where you would:
+    - Create or join a telephony/voice room.
+    - Seed the conversation with `system_message` and `patient_context`.
+    - Hand control over to the same STT/LLM/TTS pipeline as inbound.
+    For this repo, we simply log the intent so behaviour is visible.
+    """
+    logger.info(
+        f"[Outbound] call_id={call_id} topic={topic} "
+        f"patient={patient_context.get('name')} lang={patient_context.get('preferred_lang')}"
+    )
+
+
+campaign_manager = CampaignManager(callback=outbound_callback)
 
 async def interrupt_session(session_id, websocket):
     interrupted = False
@@ -213,10 +234,14 @@ async def voice_websocket(websocket: WebSocket, session_id: str = "default", lan
 
 @app.post("/campaign/trigger")
 async def trigger_campaign(patient_id: str, topic: str):
-    # In practice, this would initiate a call
-    # For the demo, we log and return success
-    logger.info(f"Manual campaign trigger: {patient_id} for {topic}")
-    return {"status": "triggered", "patient_id": patient_id}
+    """
+    Manually trigger an outbound campaign call for a given patient.
+    This wires into CampaignManager, which in turn invokes the
+    outbound_callback defined above.
+    """
+    call_id = await campaign_manager.trigger_outbound_call(patient_id, topic)
+    logger.info(f"Manual campaign trigger: {patient_id} for {topic}, call_id={call_id}")
+    return {"status": "triggered", "patient_id": patient_id, "call_id": call_id}
 
 @app.get("/health")
 async def health_check():

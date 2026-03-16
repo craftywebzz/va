@@ -26,10 +26,26 @@ class CampaignManager:
         
         patient_data = campaign_context.get(patient_id, {"name": "Patient", "preferred_lang": "en"})
         
-        system_msg = f"This is an outbound campaign call regarding {topic}. Be proactive but polite."
-        
-        # Trigger the orchestrator to start a session for this call
-        # self.callback(patient_data, system_msg)
+        system_msg = (
+            f"This is an outbound campaign call regarding {topic}. "
+            "Be proactive but polite. Start by clearly stating that this is a reminder or follow-up, "
+            "then ask if the patient would like to confirm, reschedule, or cancel their appointment."
+        )
+
+        # Notify orchestrator / higher-level callback so it can open a session or room.
+        # For now we invoke the callback asynchronously and let the application decide
+        # how to surface this to a concrete voice channel.
+        try:
+            if self.callback:
+                await self.callback(
+                    patient_context=patient_data,
+                    topic=topic,
+                    system_message=system_msg,
+                    call_id=call_id,
+                )
+        except Exception as e:
+            logger.error(f"Error while invoking outbound callback: {e}", exc_info=True)
+
         return call_id
 
     async def scheduler_loop(self):

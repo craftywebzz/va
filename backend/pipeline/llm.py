@@ -35,15 +35,28 @@ class LLMService:
         )
 
     async def run_tool(self, tool_name, args, appointment_service):
+        """
+        Dispatch tool calls from the LLM to concrete Python services.
+        """
+        if tool_name == "list_doctors":
+            return appointment_service.list_doctors()
         if tool_name == "get_available_slots":
             return appointment_service.get_available_slots(args["doctor_id"], args["date"])
-        elif tool_name == "book_appointment":
+        if tool_name == "book_appointment":
+            # Mode is optional for backward-compatibility; default to in_person
+            mode = args.get("mode", "in_person")
             return appointment_service.book_appointment(
-                args["patient_id"], args["doctor_id"], args["date"], args["time"]
+                args["patient_id"], args["doctor_id"], args["date"], args["time"], mode=mode
             )
-        elif tool_name == "cancel_appointment":
+        if tool_name == "cancel_appointment":
             return appointment_service.cancel_appointment(args["appointment_id"])
-        return {"error": "Unknown tool"}
+        if tool_name == "find_patient_appointments":
+            return appointment_service.find_patient_appointments(args["patient_id"])
+        if tool_name == "reschedule_appointment":
+            return appointment_service.reschedule_appointment(
+                args["appointment_id"], args["new_date"], args["new_time"]
+            )
+        return {"error": f"Unknown tool '{tool_name}'"}
 
     def get_system_prompt(self, patient_context=None, language="en"):
         prompts = {
